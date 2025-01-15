@@ -228,12 +228,17 @@ async function handlePropfind(request: Request, bucket: R2Bucket, bucketName: st
         props.push(fromR2Object(object));
       }
     } else {
-      const object = await bucket.head(resource_path);
-      if (object) {
-        props.push(fromR2Object(object));
-      } else {
-        return new Response("Not Found", { status: 404 });
-      }
+			if (request.url.endsWith("/")) {
+				// listAll(bucket, resource_path, true);
+				props.push(fromR2Object(null));
+			} else {
+				const object = await bucket.head(resource_path);
+				if (object) {
+					props.push(fromR2Object(object));
+				} else {
+					return new Response("Not Found", { status: 404 });
+				}
+			}
     }
 
     const xml = generatePropfindResponse(bucketName, resource_path, props);

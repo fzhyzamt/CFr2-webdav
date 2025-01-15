@@ -7,7 +7,7 @@ export function make_resource_path(request: Request): string {
   return decodeURIComponent(url.pathname.slice(1));
 }
 
-export async function* listAllFile(bucket: R2Bucket, prefix: string) {
+export function listAllFile(bucket: R2Bucket, prefix: string) {
 	return listAll(bucket, prefix, false) as AsyncGenerator<R2Object>;
 }
 

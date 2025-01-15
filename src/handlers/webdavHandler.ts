@@ -1,5 +1,5 @@
 // 文件名：src/handlers/webdavHandler.ts
-import { listAll, fromR2Object, make_resource_path, generatePropfindResponse } from '../utils/webdavUtils';
+import { listAll, fromR2Object, make_resource_path, generatePropfindResponse, listAllFile } from '../utils/webdavUtils';
 import { logger } from '../utils/logger';
 import { generateHTML, generateErrorHTML } from '../utils/templates';
 import { WebDAVProps, Env } from '../types';
@@ -41,7 +41,7 @@ export async function handleWebDAV(request: Request, env: Env): Promise<Response
           }
         });
     }
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error in WebDAV handling:", err.message);
     return new Response(generateErrorHTML("Internal Server Error", err.message), {
@@ -104,14 +104,20 @@ async function handleDirectory(bucket: R2Bucket, resource_path: string, bucketNa
   }
 
   try {
-    for await (const object of listAll(bucket, resource_path)) {
+    for await (const object of listAll(bucket, resource_path, true)) {
       if (object.key === resource_path) continue;
       const isDirectory = object.customMetadata?.resourcetype === "collection";
-      const displayName = object.key.split('/').pop() || object.key;
-      const href = `/${object.key}${isDirectory ? "/" : ""}`;
-      items.push({ name: `${isDirectory ? '📁 ' : '📄 '}${displayName}`, href });
+			const displayName = object.key.replace(resource_path, "").split("/")[0];
+
+			const href = isDirectory
+				? object.key.endsWith('/') ? `/${object.key}` : `/${object.key}/`
+				: `/${object.key}`;
+			items.push({
+				name: `${isDirectory ? "📁 " : "📄 "}${displayName}`,
+				href: href.replace(/\/+/g, '/')
+			});
     }
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error listing objects:", err.message);
     return new Response(generateErrorHTML("Error listing directory contents", err.message), {
@@ -142,7 +148,7 @@ async function handleFile(bucket: R2Bucket, resource_path: string): Promise<Resp
         "Last-Modified": object.uploaded.toUTCString()
       }
     });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error getting object:", err.message);
     return new Response(generateErrorHTML("Error retrieving file", err.message), {
@@ -163,7 +169,7 @@ async function handlePut(request: Request, bucket: R2Bucket): Promise<Response> 
       },
     });
     return new Response("Created", { status: 201 });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error uploading file:", err.message);
     return new Response(generateErrorHTML("Error uploading file", err.message), {
@@ -179,7 +185,7 @@ async function handleDelete(request: Request, bucket: R2Bucket): Promise<Respons
   try {
     await bucket.delete(resource_path);
     return new Response("No Content", { status: 204 });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error deleting object:", err.message);
     return new Response(generateErrorHTML("Error deleting file", err.message), {
@@ -201,7 +207,7 @@ async function handleMkcol(request: Request, bucket: R2Bucket): Promise<Response
       customMetadata: { resourcetype: "collection" }
     });
     return new Response("Created", { status: 201 });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error creating collection:", err.message);
     return new Response(generateErrorHTML("Error creating collection", err.message), {
@@ -218,7 +224,7 @@ async function handlePropfind(request: Request, bucket: R2Bucket, bucketName: st
   try {
     const props: WebDAVProps[] = [];
     if (depth !== "0") {
-      for await (const object of listAll(bucket, resource_path)) {
+      for await (const object of listAllFile(bucket, resource_path)) {
         props.push(fromR2Object(object));
       }
     } else {
@@ -236,7 +242,7 @@ async function handlePropfind(request: Request, bucket: R2Bucket, bucketName: st
       status: 207,
       headers: { "Content-Type": "application/xml; charset=utf-8" }
     });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error in PROPFIND:", err.message);
     return new Response(generateErrorHTML("Error in PROPFIND", err.message), {
@@ -267,7 +273,7 @@ async function handleCopy(request: Request, bucket: R2Bucket): Promise<Response>
     });
 
     return new Response("Created", { status: 201 });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error copying object:", err.message);
     return new Response(generateErrorHTML("Error copying file", err.message), {
@@ -299,7 +305,7 @@ async function handleMove(request: Request, bucket: R2Bucket): Promise<Response>
 
     await bucket.delete(sourcePath);
     return new Response("No Content", { status: 204 });
-  } catch (error) { 
+  } catch (error) {
     const err = error as Error;
     logger.error("Error moving object:", err.message);
     return new Response(generateErrorHTML("Error moving file", err.message), {

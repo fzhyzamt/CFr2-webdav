@@ -4,7 +4,7 @@ import { WebDAVProps } from '../types';
 
 export function make_resource_path(request: Request): string {
   const url = new URL(request.url);
-  return decodeURIComponent(url.pathname.slice(1)) || '/';
+  return decodeURIComponent(url.pathname.slice(1));
 }
 
 export async function* listAllFile(bucket: R2Bucket, prefix: string) {
